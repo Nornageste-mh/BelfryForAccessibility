@@ -1,0 +1,240 @@
+===== Scene[0] Main (rootObjects=8) =====
++ ThanksVideoManager  [SimpleVideoOverlayPlayer,VideoPlayer]
++ DotWeenCleaner  [DOTweenSceneCleanup]
++ Main Camera  [Camera,AudioListener,UniversalAdditionalCameraData]
++ EventSystem  [EventSystem,StandaloneInputModule,BaseInput]
++ AudioSystem  [AudioPlaybackManager]
+  + BGM  [AudioSource]
+  + CV  [AudioSource]
+  + SFX  [AudioSource]
+  + Video  [AudioSource]
++ _Manager
+  + MainMenuHandler  [MainMenuHandler]
+  + Localization  [LocalizationManager]
+  + UIFocus  [GlobalFocusFixer]
++ UISFX  [UIResponseSfxManager]
++ Canvas  [Canvas,CanvasScaler,GraphicRaycaster]
+  + Panel  [Image,Mask]
+    + Background  [Image,CanvasGroup]
+      + Title  [Image]
+      + Menu
+        + 1  [Image]
+          + 2  [Image]
+          + 3  [Image]
+          + 4  [Image]
+          + 5  [Image]
+          + 6  [Image]
+        + Buttons  [ClockwiseMenuController]
+          + Gallery  [Image,Button,CanvasGroup]
+          + Load  [Image,Button,CanvasGroup]
+          + Start  [Image,Button,CanvasGroup]
+          + Options  [Image,Button,CanvasGroup]
+          + Exit  [Image,Button,CanvasGroup]
+      + Attention  [Image,VerticalLayoutGroup,LinkManager,Button]
+        + Steam  [Image,Button]
+          + Image  [Image,Button]
+        + Xiaoheihe  [Image,Button]
+        + Bilibili  [Image,Button]
+      - Gallery  [Image,UIHideOnCancel,UIAutoFocusOnEnable]
+        + Background  [Image]
+          + Tabs  [ButtonSelectionGroup,TabGroupController]
+            + CG  [Image,Button,SelectionButton,UIButtonResponseSfx,UIFocusEffect]
+            + 视频  [Image,Button,SelectionButton,UIButtonResponseSfx,UIFocusEffect]
+            + 音乐  [Image,Button,SelectionButton,UIButtonResponseSfx,UIFocusEffect]
+            + 语音  [Image,Button,SelectionButton,UIButtonResponseSfx,UIFocusEffect]
+          + CG  [GroupedCGGalleryManager]
+            + BlankCenterImage  [Image]
+            + GameObject  [GridLayoutGroup]
+            + Box  [Image]
+          - Video  [AnimationGalleryManager]
+            + Image (1)  [Image]
+            + GameObject  [GridLayoutGroup]
+            + Image  [Image]
+          - Music  [MusicPlayerManager]
+            + Scroll View  [Image,ScrollRect]
+            + MusicList  [VerticalLayoutGroup]
+            - Slider  [Image]
+            + Album  [Image]
+            + Line  [Image]
+            + Slider  [Slider]
+            + CVCollection
+          - CV  [VoiceCollectionManager]
+            + Scroll View  [Image,ScrollRect]
+          + BottomButtons  [HorizontalLayoutGroup]
+            + 返回游戏  [Image,Button]
+            + 恢复默认  [Image]
+            + 返回标题  [Image,Button]
+        - CGPanel  [Image]
+          + Panel  [Image]
+          + New SkeletonGraphic  [SkeletonGraphic]
+            + Renderer0  [SkeletonSubmeshGraphic]
+            + Renderer1  [SkeletonSubmeshGraphic]
+            + Renderer2  [SkeletonSubmeshGraphic]
+          + Panel  [Image,Button]
+        - MoviePanel  [Image,CanvasGroup,VideoPlayer]
+          + RawImage  [RawImage]
+      - SaveAndLoad  [Image,SaveSceneController,UIHideOnCancel,UIAutoFocusOnEnable]
+        + Background  [Image]
+        + Tabs  [ButtonSelectionGroup,TabGroupController]
+          + 存档  [Image,Button,SelectionButton,UIFocusEffect,UIButtonResponseSfx]
+            + Arrow  [Image]
+            + ButtonUIImage  [Image]
+          + 读档  [Image,Button,SelectionButton,UIFocusEffect,UIButtonResponseSfx]
+            + Arrow  [Image]
+            + ButtonUIImage  [Image]
+          + 快速读档  [Image,Button,SelectionButton,UIFocusEffect,UIButtonResponseSfx]
+            + Arrow  [Image]
+            + ButtonUIImage  [Image]
+          + 流程图  [Image,Button,SelectionButton,UIFocusEffect,UIButtonResponseSfx]
+            + Arrow  [Image]
+            + ButtonUIImage  [Image]
+        - FlowchartPage  [FlowChartPanelController]
+          - Image (5)  [Image]
+          - Image (2)  [Image]
+          - Image (4)  [Image]
+          - Image (1)  [Image]
+          - Image (3)  [Image]
+          + Background  [Image]
+            + FlowchartSlot  [Image,Button]
+            + FlowchartSlot1  [Image,Button]
+            + FlowchartSlot2  [Image,Button]
+            + FlowchartSlot3  [Image,Button]
+            + FlowchartSlot4  [Image,Button]
+            + FlowchartSlot5  [Image,Button]
+            - Image  [Image]
+            - Image (5)  [Image]
+            - Image (3)  [Image]
+            - Image (1)  [Image]
+            - Image (4)  [Image]
+            - Image (2)  [Image]
+        + SavePage
+          + Preview (1)  [Image]
+            + RawImage  [RawImage]
+          + Image  [Image]
+            + PageControl  [Image]
+            + Date  [TextMeshProUGUI]  text="DATE ► --"
+            + Chapter  [TextMeshProUGUI]  text="CHAPTER ► --"
+            + Comment  [TextMeshProUGUI]  text="COMMENT ► NO DATA"
+            + Image  [Image]
+          + SaveSlots  [GridLayoutGroup]
+            + SaveSlot  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (1)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (2)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (3)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (4)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (5)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (6)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (7)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (8)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (9)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (10)  [Image,Button,SaveSlotUI,UIFocusEffect]
+            + SaveSlot (11)  [Image,Button,SaveSlotUI,UIFocusEffect]
+          - SaveControl  [HorizontalLayoutGroup]
+            + Copy  [Image,Button,UIFocusEffect]
+            + Override  [Image,Button,UIFocusEffect]
+            + Delete  [Image,Button,UIFocusEffect]
+        + BottomButtons  [HorizontalLayoutGroup]
+          + 返回游戏  [Image,Button,UIFocusEffect,UIButtonResponseSfx]
+          + 恢复默认  [Image,Button,UIButtonResponseSfx]
+          + 返回标题  [Image,Button,UIFocusEffect,UIButtonResponseSfx]
+      - SettingPanel  [Image,SettingsUIManager,UIHideOnCancel,UIAutoFocusOnEnable]
+        + Background  [Image]
+          + Tabs  [ButtonSelectionGroup,TabGroupController]
+            + 系统设置  [Image,Button,SelectionButton,UIFocusEffect,UIButtonResponseSfx]
+            + 声音设置  [Image,Button,SelectionButton,UIFocusEffect,UIButtonResponseSfx]
+            + 快捷键引导  [Image,Button,SelectionButton,UIFocusEffect,UIButtonResponseSfx]
+            + 手柄引导  [Image,Button,SelectionButton,UIFocusEffect,UIButtonResponseSfx]
+          + SystemSettings  [VerticalLayoutGroup]
+            + 显示模式  [HorizontalLayoutGroup,ButtonSelectionGroup,SettingsSelectionGroup]
+            + 是否自动跳过已读文本  [HorizontalLayoutGroup,ButtonSelectionGroup,SettingsSelectionGroup]
+            + 是否开启二级确认  [HorizontalLayoutGroup,ButtonSelectionGroup,SettingsSelectionGroup]
+            + 未读文本快进  [HorizontalLayoutGroup,ButtonSelectionGroup,SettingsSelectionGroup]
+            + 文本显示速度  [HorizontalLayoutGroup]
+            + 自动播放速度  [HorizontalLayoutGroup]
+          - SoundSettings
+            + SoundSettingsLeft  [VerticalLayoutGroup]
+            + SoundSettingsRight  [VerticalLayoutGroup]
+          - Shortcuts
+            + Shortcuts  [Image]
+          - Joystick
+            + Shortcuts  [Image]
+          + BottomButtons  [HorizontalLayoutGroup,UIFocusEffect]
+            + 返回游戏  [Image,Button,UIFocusEffect,UIButtonResponseSfx]
+            + 恢复默认  [Image,Button,UIFocusEffect,UIButtonResponseSfx]
+            + 返回标题  [Image,Button,UIFocusEffect,UIButtonResponseSfx]
+  - EN  [Image,Button,LanguageTestSwitcher]
+    + Text (TMP)  [TextMeshProUGUI]  text="EN"
+  - CN  [Image,Button]
+    + Text (TMP)  [TextMeshProUGUI]  text="CN\n"
+  + ConfirmPanel  [ConfirmPanel]
+    - ConfirmPanel  [Image,UIHideOnCancel,UIAutoFocusOnEnable]
+      + Yes  [Image,Button,UIFocusEffect]
+      + No  [Image,Button,UIFocusEffect]
+      + Text (TMP)  [TextMeshProUGUI]  text="New Text"
+  - ThanksVideoPanel
+    + ThanksVideo  [RawImage]
+---- 活着的 MonoBehaviour 类型（Top60）----
+  Image x271
+  Button x103
+  UIFocusEffect x73
+  TextMeshProUGUI x52
+  UIButtonResponseSfx x26
+  SelectionButton x25
+  RawImage x15
+  SaveSlotUI x12
+  HorizontalLayoutGroup x12
+  Slider x10
+  ButtonSelectionGroup x9
+  SettingsSlider x9
+  BGMButton x8
+  VerticalLayoutGroup x7
+  SettingsSelectionGroup x5
+  UIHideOnCancel x4
+  UIAutoFocusOnEnable x4
+  Mask x4
+  Scrollbar x4
+  GridLayoutGroup x4
+  ContentSizeFitter x3
+  SkeletonSubmeshGraphic x3
+  TabGroupController x3
+  ScrollRect x2
+  DOTweenComponent x1
+  BaseInput x1
+  WindowMaximizeAspectLimiter x1
+  ProbePlugin x1
+  ThreadingHelper x1
+  EventSystem x1
+  MainMenuHandler x1
+  SimpleVideoOverlayPlayer x1
+  DOTweenSceneCleanup x1
+  LocalizationManager x1
+  UniversalAdditionalCameraData x1
+  LanguageTestSwitcher x1
+  PersistentDataManager x1
+  StandaloneInputModule x1
+  SteamManager x1
+  LinkManager x1
+  DisplayManager x1
+  AudioPlaybackManager x1
+  GlobalFocusFixer x1
+  UIResponseSfxManager x1
+  GraphicRaycaster x1
+  CanvasScaler x1
+  SaveManager x1
+  TextSpeedPreviewer x1
+  AnimationGalleryManager x1
+  VoiceCollectionManager x1
+  ConfirmPanel x1
+  SaveSceneController x1
+  GroupedCGGalleryManager x1
+  CVSingleVolumeSwitcher x1
+  SkeletonGraphic x1
+  MusicPlayerManager x1
+  SettingsUIManager x1
+  FlowChartPanelController x1
+  ClockwiseMenuController x1
+
+################ 场景树转储 15:36:58 ################
+===== Scene[0] Main (rootObjects=8) =====
++ ThanksVideoManager  [SimpleVideoOverlayPlayer,VideoPlayer]
++ DotWeenCleaner  [DOTweenSceneCleanup]
