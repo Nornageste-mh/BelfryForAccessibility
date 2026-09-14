@@ -35,7 +35,7 @@ namespace BelfryA11y
     ///   标题旋转菜单让位给导航       ClockwiseMenuController.HandleKeyboardGamepadInput
     ///   菜单 / 存档 / 设置键盘导航   无挂载点，UiNav 每帧扫描 Selectable
     /// </summary>
-    [BepInPlugin(Guid, "The Belfry A11y Reader", "0.1.0.0")]
+    [BepInPlugin(Guid, "The Belfry A11y Reader", "0.1.0.1")]
     public class Plugin : BaseUnityPlugin
     {
         public const string Guid = "belfry.a11y.reader";
@@ -65,11 +65,16 @@ namespace BelfryA11y
 
         // ---- 其它 ----
         internal static ConfigEntry<bool> CfgStartupHint;
+        internal static ConfigEntry<bool> CfgAnnounceOnSkipStop;
         internal static ConfigEntry<bool> CfgDiagLog;
 
         private Harmony _harmony;
         private float _hintAt = -1f;
         private bool _hinted;
+
+        // 快进状态跟踪：用来检测「按住 Ctrl 快进 → 松手」这个下降沿
+        private ScriptEngine _engine;
+        private bool _wasFastForward;
 
         private void Awake()
         {
@@ -178,6 +183,12 @@ namespace BelfryA11y
                 "游戏启动后朗读一句「无障碍补丁已加载」的提示，用来确认读屏通路是通的。\n" +
                 "如果你已经能听到剧情朗读，可以关掉它。");
 
+            CfgAnnounceOnSkipStop = Config.Bind("朗读", "快进停止时补念当前句", true,
+                "快进（按住 Ctrl，或者按 F）停下来的时候，把停在的那一句补念出来。\n" +
+                "快进期间补丁不朗读（否则会刷屏），所以停下来那一刻屏幕上是什么\n" +
+                "读屏用户完全不知道 —— 这一项就是补这个缺口。\n" +
+                "停在选项上时不会重复念：选项出现的那一刻已经完整播报过一遍了。");
+
             CfgDiagLog = Config.Bind("其它", "界面诊断日志", false,
                 "把进入导航模式时扫描到的控件全部写进 LogOutput.log，包括：\n" +
                 "  · 每一组、每一项的朗读文本、屏幕行号与层级路径\n" +
@@ -220,6 +231,7 @@ namespace BelfryA11y
                 Choices.Update();
 
                 HandleRepeatKey();
+                WatchFastForward();
                 HandleStartupHint();
             }
             catch (Exception e)
@@ -252,8 +264,36 @@ namespace BelfryA11y
             if (KeyEdge.Pressed(_repeatKey)) Reader.Repeat();
         }
 
-        private void HandleStartupHint()
+        /// <summary>
+        /// 盯着 ScriptEngine.isFastForward 的下降沿。
+        ///
+        /// 快进期间每一行都走 ExecuteDialogue 的 isInstant 分支，直接写
+        /// dialogueText、不调用 StartTyping，所以补丁一句都不念（这是对的，
+        /// 否则快进会刷屏）。但玩家松手停下来之后，屏幕上停在哪一句他完全不知道。
+        ///
+        /// 这里在「快进 → 不快进」的那一帧补念一次当前句。
+        /// 缓存的实例在场景切换后会是 Unity 伪空，所以每次为空都重新找。
+        /// </summary>
+        private void WatchFastForward()
         {
+            if (_engine == null)
+            {
+                _engine = UnityEngine.Object.FindObjectOfType<ScriptEngine>();
+                _wasFastForward = _engine != null && _engine.isFastForward;
+                return;
+            }
+
+            bool now = _engine.isFastForward;
+            bool stopped = _wasFastForward && !now;
+            _wasFastForward = now;
+
+            if (!stopped) return;
+            if (CfgAnnounceOnSkipStop == null || !CfgAnnounceOnSkipStop.Value) return;
+
+            Reader.AnnounceAfterSkipStop();
+        }
+
+        private void HandleStartupHint()        {
             if (_hinted) return;
             if (_hintAt < 0f || Time.realtimeSinceStartup < _hintAt) return;
             _hinted = true;
@@ -277,9 +317,14 @@ namespace BelfryA11y
 
         [HarmonyPatch(typeof(DialogueCommandExecutor), nameof(DialogueCommandExecutor.ExecuteDialogue))]
         [HarmonyPrefix]
-        private static void ExecuteDialogue_Pre(DialogueScene scene)
+        private static void ExecuteDialogue_Pre(DialogueScene scene, [HarmonyArgument(2)] bool isInstant)
         {
-            Reader.NoteScene(scene);
+            // 用 HarmonyArgument(2) 而不是参数名 isInstant：Harmony 默认按**运行时**
+            // 的参数名绑定，而运行时名字未必和反编译结果一致 —— 上一版就是在这上面
+            // 栽过一次（HandleExpressionMessage 的参数运行时叫 dialogue，不叫
+            // phoneDialogue），报错却只出现在 PatchAll 的一行日志里，很隐蔽。
+            // 位置下标没有这个问题。
+            Reader.NoteScene(scene, isInstant);
         }
 
         [HarmonyPatch(typeof(UISceneController), nameof(UISceneController.StartTyping))]

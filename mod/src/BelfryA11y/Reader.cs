@@ -1,8 +1,6 @@
 using System;
-using System.Collections;
 using TMPro;
 using UnityEngine;
-using UnityEngine.EventSystems;
 
 namespace BelfryA11y
 {
@@ -21,19 +19,38 @@ namespace BelfryA11y
     /// 所以：
     ///   · ExecuteDialogue 的 Prefix 抓住「当前这一行的 DialogueScene」，
     ///     里面同时有 VoiceFilename（判定有没有配音）和 CharacterName。
-    ///   · StartTyping / PresentLineAsync 才是真正「这一行开始显示」的时刻，
-    ///     到那时再决定念不念。
+    ///   · StartTyping / PresentLineAsync 才是真正「这一行开始显示」的时刻。
     ///
-    /// === 为什么用「待消费」而不是全局当前行 ===
+    /// === 三条显示路径，一条都不能漏 ===
     ///
-    /// ExecuteDialogue 是 async：Prefix 跑完、方法体 await 出去，期间完全可能
-    /// 有别的行插进来。用一个「还没被消费的那一行」做缓冲，比在 StartTyping
-    /// 里去反查 ScriptEngine.currentDialogueIndex 稳 —— 后者在快进/回退时
-    /// 未必对得上正在显示的文本。
+    ///   1. 普通显示        → StartTyping(text)             → Consume(...)
+    ///   2. 手书显示        → PresentLineAsync(text, false) → Consume(...)
+    ///   3. **瞬时显示**    → ExecuteDialogue 的 isInstant 分支直接写
+    ///                        dialogueText.text，**不调用 StartTyping**。
+    ///                        快进（按住 Ctrl / 按 F）与回退都走这一条。
     ///
-    /// isInstant（快进 / 回退 / 非停顿指令）那一支**不**调用 StartTyping，
-    /// 直接写 dialogueText.text，所以天然不会被念出来 —— 这正是我们要的：
-    /// 快进时读屏不该刷屏。
+    /// 第 3 条最初被漏掉了，症状是：按住 Ctrl 快进一阵再松手，按退格念的是
+    /// 快进之前那一句 —— 因为缓冲区从来没被快进经过的行更新过。
+    ///
+    /// === 重读缓冲区（_buffer）===
+    ///
+    /// 退格键念的就是它。**所有**会出现在屏幕上的台词都要进去，包括：
+    ///
+    ///   · 朗读了的无配音行
+    ///   · **没有**朗读的有配音行 —— 补丁故意不出声（TTS 和角色语音叠在一起
+    ///     两边都听不清），但玩家想听文字时按退格，TTS 就该把这一句念出来。
+    ///     这是一条真实反馈：有配音的行如果只 Speech.Stop() 而不记缓冲区，
+    ///     退格会念出**上一句**，玩家会以为「这一句翻不回来」。
+    ///   · 快进经过的行（只记不念）
+    ///   · 一批选项的整体播报
+    ///
+    /// 唯一不进缓冲区的是「已选择 2」「已退出导航模式」这类**状态提示** ——
+    /// 它们不是剧情内容，占了缓冲区反而会把刚听到的台词挤掉。
+    ///
+    /// === 唯一出口 ===
+    ///
+    /// 除了状态提示，所有朗读都走 <see cref="Say"/>：它负责去重、进缓冲区、
+    /// 再交给 Speech。这样「念过什么」和「能重念什么」永远是同一份名单。
     /// </summary>
     internal static class Reader
     {
@@ -41,36 +58,87 @@ namespace BelfryA11y
         {
             public string Speech = "";     // 已加工好的朗读文本（含说话人前缀）
             public bool HasVoice;          // 这一行有配音 → 不朗读，只放语音
-            public string Raw = "";        // 原始台词，用于比对
+            public string Raw = "";        // 原始台词
             public string Speaker = "";
             public string Type = "";
         }
 
         private static Line _pending;      // 刚从 ExecuteDialogue 拿到的行，尚未显示
-        private static Line _current;      // 正在显示、可供「重读」的那一行
-        private static bool _consumed;     // _pending 是否已被某次显示消费
+        private static Line _current;      // 正在显示的那一行
 
-        /// <summary>是否处在「能判定」的状态。开头几行可能拿不到 scene。</summary>
-        private static bool _everJudged;
+        /// <summary>重读缓冲区 —— 退格键念的就是它。</summary>
+        private static string _buffer = "";
+
+        // 极短时间内同一句重复触发时的去重哨兵。**不是**重读缓冲区。
+        private static string _lastSpoken = "";
+        private static float _lastSpeakAt;
+
+        public static bool HasJudged { get; private set; }
+
+        // ================= 唯一出口 =================
+
+        /// <summary>朗读一段新内容：去重 → 进重读缓冲区 → 出声。</summary>
+        public static void Say(string text, bool interrupt)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            text = text.Trim();
+            if (text.Length == 0) return;
+
+            // 同一句在极短时间内重复触发就跳过（同一行会被多条路径碰到）
+            if (text == _lastSpoken && Time.realtimeSinceStartup - _lastSpeakAt < 0.4f) return;
+
+            _lastSpoken = text;
+            _lastSpeakAt = Time.realtimeSinceStartup;
+            Remember(text);
+            Speech.Speak(text, interrupt);
+        }
+
+        /// <summary>
+        /// 只记不念。快进经过的行、以及有配音的行走这里。
+        /// 空串不覆盖已有内容 —— 别让一个没台词的行把缓冲区清掉。
+        /// </summary>
+        public static void Remember(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            _buffer = text;
+        }
 
         // ================= 供 Patch 调用 =================
 
-        /// <summary>ExecuteDialogue 的 Prefix：记住这一行。</summary>
-        public static void NoteScene(DialogueScene scene)
+        /// <summary>
+        /// ExecuteDialogue 的 Prefix：记住这一行。
+        ///
+        /// isInstant 为 true 表示这一行是「直接写 dialogueText」显示的
+        /// （快进 / 回退 / 非停顿指令），不会走 StartTyping，所以这里就得
+        /// 把缓冲区更新掉，否则松开快进后按退格会念到快进之前的句子。
+        /// </summary>
+        public static void NoteScene(DialogueScene scene, bool isInstant)
         {
             if (scene == null) return;
             try
             {
+                string type = scene.TypeName ?? "";
                 var line = new Line
                 {
-                    Type = scene.TypeName ?? "",
+                    Type = type,
                     Speaker = TextProc.CleanName(scene.CharacterName),
                     Raw = scene.Dialogue ?? "",
                     HasVoice = !string.IsNullOrEmpty(scene.VoiceFilename)
                 };
                 line.Speech = BuildSpeech(line.Speaker, line.Raw);
+
+                if (isInstant)
+                {
+                    // 只有真正会显示出台词的类型才进缓冲区。
+                    // 「成就」这类指令的 Dialogue 字段里装的是成就 ID（例如 ACV_1），
+                    // 记进去会让退格念出一串代号。
+                    if (!IsDisplayType(type)) return;
+                    _current = line;
+                    Remember(line.Speech);
+                    return;
+                }
+
                 _pending = line;
-                _consumed = false;
             }
             catch (Exception e)
             {
@@ -81,24 +149,36 @@ namespace BelfryA11y
         /// <summary>UISceneController.StartTyping 的 Postfix。</summary>
         public static void OnTyping(string text)
         {
-            Consume(text, isShoushu: false);
+            Consume(text);
         }
 
         /// <summary>ShoushuDialoguePresenter.PresentLineAsync 的 Prefix。</summary>
         public static void OnShoushu(string text, bool instant)
         {
-            // instant=true 是回退/快进路径，不朗读
+            // instant=true 是回退/快进路径，不朗读；缓冲区已由 NoteScene 处理
             if (instant) return;
-            Consume(text, isShoushu: true);
+            Consume(text);
+        }
+
+        /// <summary>与 ScriptEngine.IsStopPoint 同一套判定：真正停在屏幕上等玩家的类型。</summary>
+        private static bool IsDisplayType(string t)
+        {
+            return t == "对话" || t == "旁白" || t == "心理" || t == "手书";
         }
 
         /// <summary>真正决定「这一句念不念」。</summary>
-        private static void Consume(string shownText, bool isShoushu)
+        private static void Consume(string shownText)
         {
             try
             {
+                // 一句新台词开始显示，说明屏幕上的选项按钮一定已经没了。
+                // 选项列表必须在这里作废，不能只靠「玩家按了数字键就清」——
+                // 鼠标点选项根本不经过我们的按键处理，列表会一直留着，
+                // 之后每次退格都会去念那几个早就没了的选项。
+                Choices.ClearStory();
+
                 Line line = _pending;
-                _consumed = true;
+                _pending = null;
 
                 if (line == null)
                 {
@@ -107,27 +187,30 @@ namespace BelfryA11y
                     if (!Plugin.CfgSpeakWhenUnknown.Value) return;
                     string fallback = TextProc.ToSpeech(shownText);
                     if (TextProc.IsTrivial(fallback)) return;
-                    _everJudged = true;
+                    HasJudged = true;
                     _current = new Line { Speech = fallback, Raw = shownText, HasVoice = false };
-                    Speech.Speak(fallback, true);
+                    Say(fallback, true);
                     return;
                 }
 
                 _current = line;
-                _everJudged = true;
+                HasJudged = true;
 
                 if (line.HasVoice)
                 {
-                    // 这一行有配音：放语音，不朗读。但要把可能还在念的上一句打断，
-                    // 否则读屏会和配音叠在一起。
+                    // 有配音：放语音，不朗读，并打断上一句未读完的朗读。
+                    // 但这一行**仍然要进重读缓冲区** —— 语音错过了、
+                    // 或者玩家没听清，按退格让 TTS 把它念一遍，正是重读键该干的事。
                     Speech.Stop();
+                    Remember(line.Speech);
+                    _lastSpoken = "";
                     return;
                 }
 
                 if (!Plugin.CfgReadUnvoiced.Value) return;
                 if (string.IsNullOrEmpty(line.Speech) || TextProc.IsTrivial(line.Speech)) return;
 
-                Speech.Speak(line.Speech, true);
+                Say(line.Speech, true);
             }
             catch (Exception e)
             {
@@ -145,6 +228,26 @@ namespace BelfryA11y
             return speaker + "：" + body;
         }
 
+        /// <summary>直接从屏幕上的 TMP 读当前台词（兜底用）。</summary>
+        private static string LiveSpeech()
+        {
+            try
+            {
+                var ui = UnityEngine.Object.FindObjectOfType<UISceneController>();
+                if (ui == null || ui.dialogueText == null) return "";
+
+                string body = TextProc.ToSpeech(ui.dialogueText.text);
+                if (string.IsNullOrEmpty(body)) return "";
+
+                string name = ui.characterNameText != null
+                    ? TextProc.CleanName(ui.characterNameText.text) : "";
+                if (Plugin.CfgSpeakName.Value && !string.IsNullOrEmpty(name))
+                    return name + "：" + body;
+                return body;
+            }
+            catch { return ""; }
+        }
+
         // ================= 重读 =================
 
         /// <summary>重读当前这一句。Backspace。</summary>
@@ -152,19 +255,26 @@ namespace BelfryA11y
         {
             try
             {
-                if (_current != null && !string.IsNullOrEmpty(_current.Speech))
+                // 停在选项上时优先重念选项 —— 这时屏幕上没有「一句台词」可读，
+                // 玩家按退格想听的就是那几个选项。
+                if (Choices.RepeatAnnounce()) return;
+
+                if (!string.IsNullOrEmpty(_buffer))
                 {
-                    Speech.Speak(_current.Speech, true);
+                    // 直接用 Speech，不走 Say：Say 有 0.4 秒同句去重，
+                    // 会把「刚念完马上按退格再听一遍」这个正当操作吃掉。
+                    Speech.Speak(_buffer, true);
                     return;
                 }
-                // 还没有任何一句被读过：把当前 TMP 上的文字念出来兜底
-                var ui = UnityEngine.Object.FindObjectOfType<UISceneController>();
-                string t = ui != null && ui.dialogueText != null ? ui.dialogueText.text : "";
-                if (!string.IsNullOrEmpty(t))
+
+                // 缓冲区还是空的（刚进游戏就按了退格）：念屏幕上现成的那一句
+                string live = LiveSpeech();
+                if (!string.IsNullOrEmpty(live))
                 {
-                    Speech.Speak(TextProc.ToSpeech(t), true);
+                    Speech.Speak(live, true);
                     return;
                 }
+
                 Speech.Speak("没有可以重读的内容。", true);
             }
             catch (Exception e)
@@ -173,16 +283,54 @@ namespace BelfryA11y
             }
         }
 
-        /// <summary>手机消息。</summary>
+        // ================= 快进停下来 =================
+
+        /// <summary>
+        /// 快进（按住 Ctrl / 按 F）停止时调用：把停在的那一句补念出来，
+        /// 否则玩家松开 Ctrl 之后屏幕上是什么完全不知道。
+        ///
+        /// 停在选项上时不念 —— 选项出现的那一刻已经完整播报过一遍了，
+        /// 再念一次只是重复。
+        /// </summary>
+        public static void AnnounceAfterSkipStop()
+        {
+            try
+            {
+                if (Choices.HasChoices) return;
+
+                string text = !string.IsNullOrEmpty(_buffer) ? _buffer : LiveSpeech();
+                if (string.IsNullOrEmpty(text)) return;
+
+                // 走 Say：如果停下来的正好是刚刚念过的那一句，去重会拦住它，
+                // 不会出现「停下来又念一遍一样的」。
+                Say(text, true);
+            }
+            catch (Exception e)
+            {
+                Plugin.Log?.LogWarning("[Reader] AnnounceAfterSkipStop 失败: " + e.Message);
+            }
+        }
+
+        /// <summary>快进期间是否应该继续更新缓冲区（永远要，见 NoteScene 的注释）。</summary>
+        public static string BufferForDiag { get { return _buffer; } }
+
+        // ================= 手机 =================
+
         public static void OnPhoneMessage(string text, bool isLeft, string speaker)
         {
             if (!Plugin.CfgReadPhone.Value) return;
             try
             {
+                // 手机聊天的后续消息不走 StartTyping，所以剧情选项那一侧的清理
+                // 不会顺手发生，这里要自己把手机选项作废。
+                Choices.ClearPhone();
+
                 string body = TextProc.ToSpeech(text);
                 if (string.IsNullOrEmpty(body)) return;
-                string prefix = string.IsNullOrEmpty(speaker) ? (isLeft ? "对方：" : "我：") : speaker + "：";
-                Speech.Speak(prefix + body, true);
+                string prefix = string.IsNullOrEmpty(speaker)
+                    ? (isLeft ? "对方：" : "我：")
+                    : speaker + "：";
+                Say(prefix + body, true);
             }
             catch (Exception e)
             {
@@ -190,28 +338,17 @@ namespace BelfryA11y
             }
         }
 
-        /// <summary>手机表情贴纸。</summary>
         public static void OnPhoneSticker(bool isLeft)
         {
             if (!Plugin.CfgReadPhone.Value || !Plugin.CfgReadPhoneSticker.Value) return;
-            Speech.Speak(isLeft ? "对方发来一张表情图片。" : "我发了一张表情图片。", true);
+            Say(isLeft ? "对方发来一张表情图片。" : "我发了一张表情图片。", true);
         }
 
-        /// <summary>进入/切换到一个新的界面时读一句提示（由 UiNav 调用）。</summary>
-        public static void Announce(string text)
-        {
-            if (string.IsNullOrEmpty(text)) return;
-            Speech.Speak(text, true);
-        }
-
-        public static bool HasJudged { get { return _everJudged; } }
-
-        /// <summary>场景切换时清掉残留状态，避免把上一场景的最后一句又念一遍。</summary>
+        /// <summary>场景切换时清掉残留状态。</summary>
         public static void Reset()
         {
             _pending = null;
             _current = null;
-            _consumed = false;
         }
     }
 }
